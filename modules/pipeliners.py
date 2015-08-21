@@ -2,7 +2,9 @@
 
 import subprocess
 import sge
+import time
 
+import pprint as pp
 
 __verbose_level = 0
 
@@ -23,14 +25,13 @@ __steps = list();
 
 __USE_SGE = 0
 
-def local():
+def use_local():
     global __USE_SGE
     __USE_SGE = 0
 
-def SGE():
+def use_SGE():
     global __USE_SGE
     __USE_SGE = 1
-
 
 def set_verbose_level( new_level ):
 
@@ -68,64 +69,81 @@ def run_steps():
 #------------------------------------------------------------
 # Make system call fucntion that checks if the function exited correctly
 
-def system_call( step_name, *cmds ):
+def system_call( step_name, cmds ):
 
-    verbose_print(cmd, 'DEBUG')
+    if (type( cmds ) is str):
+        cmds = [cmds]
 
     if ( __USE_SGE ):
-        _run_on_SGE( step_name, *cmds )
+        _run_on_SGE( step_name, cmds )
 
     else:
-        _run_local(step_name, *cmds)
+        _run_local(step_name, cmds)
 
 
-def _run_on_SGE( step_name, cmd):
-    import drmaa
-    import os
+def _run_on_SGE( step_name, cmds):
 
-    command = cmd.split(" ")
-#    print cmd
-#    print " - ".join( command )
 
-#    print command[0] + command[1]
+    jobids = []
 
-    with drmaa.Session() as s:
-#        print('Creating job template')
-        jt = s.createJobTemplate()
-#        jt.remoteCommand = os.path.join(os.getcwd(), command[0])
-        jt.remoteCommand = os.path.join(command[0])
-        jt.args = command[1:])
-#        jt.args = ['5']
-        jt.joinFiles=True
-                   
-        jobid = s.runJob(jt)
-        print('Your job has been submitted with ID %s' % jobid)
+    for cmd in cmds:
+        
+        jobid = sge.submit_job( cmd )
+        jobids.append( jobid )
 
-        retval = s.wait(jobid, drmaa.Session.TIMEOUT_WAIT_FOREVER)
 
-        print('Job: {0} finished with status {1}'.format(retval.jobId, retval.hasExited))
-        import pprint as pp
-        pp.pprint( retval )
+#    pp.pprint( jobids );
 
-        if ( retval.exitStatus == 0):
-            verbose_print("Script failed at %s stage, jobid: %s" % (step_name, jobid), 'DEBUG')
-            verbose_print("Script failed at %s stage" % (step_name), 'INFO')
-            exit()
+    
+
+    while True:
+        jobs_not_done = 0
+        
+        
+        for jobid in jobids:
+            job_status = sge.job_successful( jobid )
+        
+            if (job_status == -1):
+                jobs_not_done += 1
+
+
+            
+        if ( jobs_not_done ):
+            print "Waiting for %d jobs to finish..." % jobs_not_done
+            time.sleep( 30 )
+
         else:
-            verbose_print("Script sucessful at %s stage" % (step_name), 'INFO')
-            verbose_print("Job %s (jobid: %s) successful !" % (step_name, jobid), 'DEBUG')
-            s.deleteJobTemplate(jt)
+            break
+
+
+    jobs_failed = 0
+    for jobid in jobids:
+        job_status = sge.job_successful( jobid )
+        if ( job_status == 0):
+            jobs_failed += 1
+
+
+    if ( jobs_failed ):
+        verbose_print("Script failed at %s stage, %d jobs failed" % (step_name, jobs_failed), 'DEBUG')
+        exit()
+    else:
+        verbose_print("Script sucessful at %s stage" % (step_name), 'INFO')
+        verbose_print("Job %s (jobid: %s) successful !" % (step_name, jobid), 'DEBUG')
     
 
 
-def _run_local( step_name, cmd ):
+def _run_local( step_name, cmds ):
 
+    for cmd in cmds:
 
-    try:
-        subprocess.check_call(cmd, shell=True)
+        
+        verbose_print(cmd, 'DEBUG')
+    
+        try:
+            subprocess.check_call(cmd, shell=True)
 
-    except subprocess.CalledProcessError as scall:
+        except subprocess.CalledProcessError as scall:
 
-        verbose_print("Script failed at %s stage - exit code was %s, ouput = %s" % (step_name, scall.returncode, scall.output), 'DEBUG')
-        verbose_print("Script failed at %s stage - exit code was %s" % (step_name, scall.returncode), 'INFO')
-        exit()
+            verbose_print("Script failed at %s stage - exit code was %s, ouput = %s" % (step_name, scall.returncode, scall.output), 'DEBUG')
+            verbose_print("Script failed at %s stage - exit code was %s" % (step_name, scall.returncode), 'INFO')
+            exit()

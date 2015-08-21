@@ -11,7 +11,7 @@ def submit_job( cmd, limit = ""):
 
 
     args = shlex.split(qsub_cmd)
-    print args
+#    print args
 
 
     p = subprocess.Popen(args, shell=True, 
@@ -22,10 +22,10 @@ def submit_job( cmd, limit = ""):
     output = p.communicate(cmd)
     jobid = re.match('Your job (\d+)', str(output[0]))
     jobid = jobid.groups(0)
-    print "OUTPUT " +str(output[0])
-    print "jobid = " + str(jobid[0])
+#    print "OUTPUT " +str(output[0])
+#    print "jobid = " + str(jobid[0])
 
-    print "Jobid : " + str(jobid)
+#    print "Jobid : " + str(jobid)
 
     return str(jobid[0])
 
@@ -84,9 +84,9 @@ def job_successful(jobid):
 #        print key + " -- " + value + "]"
         data[ key ] = value
 
-    if ( "exit_status" in data and data[  "exit_status" ]  == 0 ):
+    if ( "exit_status" in data and data[  "exit_status" ]  == '0' ):
         return 1
-    elif ( "exit_status" in data and data[  "exit_status" ]  != 0 ):
+    elif ( "exit_status" in data and data[  "exit_status" ]  != '0' ):
         return 0
     else:
         #for unfinished...
